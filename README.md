@@ -1,4 +1,4 @@
-# Le Petit Papelaria
+# Le Petit Papelaria | Trabalho 3º semestre ADS
 
 E-commerce completo desenvolvido em PHP + MySQL.
 
