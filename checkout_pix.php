@@ -1,36 +1,78 @@
 <?php
+
 require 'config.php';
-session_start();
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require 'header.php';
 
+/* ===============================
+   VERIFICA CARRINHO
+================================= */
 if (empty($_SESSION['cart'])) {
-    echo "<h2 style='text-align:center;margin-top:140px;'>Seu carrinho está vazio</h2>";
-    require 'footer.php';
-    exit;
+?>
+
+<div class="auth-box">
+    <h2>Carrinho vazio</h2>
+
+    <p style="text-align:center; margin-top:15px; color:#666;">
+        Adicione produtos antes de finalizar sua compra.
+    </p>
+
+    <a href="index.php" class="btn full" style="margin-top:20px;">
+        Voltar para loja
+    </a>
+</div>
+
+<?php
+require 'footer.php';
+exit;
 }
 ?>
 
-<div class="auth-box" style="margin-top:160px;">
-    <h2>Pagamento via PIX</h2>
+<div class="auth-box pix-box">
 
-    <p style="text-align:center;color:var(--text-soft);font-size:15px;">
-        Escaneie o QR Code abaixo para realizar o pagamento.
-    </p>
+<h2>Pagamento via PIX</h2>
 
-    <div style="text-align:center;margin:20px 0;">
-       <!-- qr code aqui --> <img src="" 
-             alt="QR Code PIX"
-             style="width:240px;border-radius:16px;box-shadow:var(--shadow);">
-    </div>
+<p class="pix-text">
+Escaneie o QR Code abaixo para realizar o pagamento.
+Após pagar, envie o comprovante para confirmação.
+</p>
 
-    <form method="post" action="finalizar_pedido.php" enctype="multipart/form-data">
-        <label>Envie o comprovante do PIX</label>
-        <input type="file" name="comprovante" accept="image/*" required>
+<div class="pix-qrcode">
 
-        <button class="btn" style="width:100%;margin-top:10px;">
-            Enviar comprovante
-        </button>
-    </form>
+<img src="uploads/qrcode-pix.png" alt="QR Code PIX">
+
+</div>
+
+<form
+method="post"
+action="finalizar_pedido.php"
+enctype="multipart/form-data"
+class="pix-form"
+>
+
+<label>Enviar comprovante</label>
+
+<input
+type="file"
+name="comprovante"
+accept="image/*,.pdf"
+required
+>
+
+<button class="btn full">
+Confirmar Pagamento
+</button>
+
+</form>
+
+<div class="pix-info">
+Prazo de confirmação: até 30 minutos após envio.
+</div>
+
 </div>
 
 <?php require 'footer.php'; ?>

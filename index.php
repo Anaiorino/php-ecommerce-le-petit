@@ -9,13 +9,32 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 12;
 $offset = ($page - 1) * $perPage;
 
-$where = '';
+$whereList = [];
 $params = [];
 
 if ($q !== '') {
-    $where = "WHERE nome LIKE :q OR descricao LIKE :q OR categoria LIKE :q OR marca LIKE :q";
-    $params['q'] = "%$q%";
+    $whereList[] = "
+        (
+            nome LIKE :q OR
+            descricao LIKE :q OR
+            categoria LIKE :q OR
+            marca LIKE :q
+        )
+    ";
+
+    $params['q'] = "%{$q}%";
 }
+
+if (isset($_GET['promo'])) {
+    $whereList[] = "promocao = 1";
+}
+
+$where = '';
+
+if ($whereList) {
+    $where = 'WHERE ' . implode(' AND ', $whereList);
+}
+
 
 // total
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM products $where");

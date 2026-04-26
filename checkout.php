@@ -1,14 +1,21 @@
-
 <?php
 
 require 'config.php';
-require 'header.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 if (empty($_SESSION['cart'])) {
     header("Location: cart.php");
     exit;
 }
 
+require 'header.php';
+
+/* ===============================
+   BUSCAR PRODUTOS DO CARRINHO
+================================= */
 $ids = array_keys($_SESSION['cart']);
 $marks = implode(',', array_fill(0, count($ids), '?'));
 
@@ -20,7 +27,8 @@ $items = $stmt->fetchAll();
 $total = 0;
 
 foreach ($items as $item) {
-    $total += $item['preco'] * $_SESSION['cart'][$item['id']];
+    $qtd = (int) $_SESSION['cart'][$item['id']];
+    $total += $item['preco'] * $qtd;
 }
 ?>
 
@@ -28,79 +36,98 @@ foreach ($items as $item) {
 
 <div class="checkout-grid">
 
-<div class="checkout-box">
+    <!-- FORMULÁRIO -->
+    <div class="checkout-box">
 
-<form action="finalizar_pedido.php" method="post" enctype="multipart/form-data">
+        <form
+            action="finalizar_pedido.php"
+            method="post"
+            enctype="multipart/form-data"
+        >
 
-<label>Nome Completo</label>
-<input type="text" name="nome" required>
+            <label>Nome Completo</label>
+            <input type="text" name="nome" required>
 
-<label>Telefone</label>
-<input type="text" name="telefone" required>
+            <label>Telefone</label>
+            <input type="text" name="telefone" required>
 
-<label>CEP</label>
-<input type="text" name="cep" required>
+            <label>CEP</label>
+            <input type="text" name="cep" required>
 
-<label>Endereço</label>
-<input type="text" name="endereco" required>
+            <label>Endereço</label>
+            <input type="text" name="endereco" required>
 
-<label>Número</label>
-<input type="text" name="numero" required>
+            <label>Número</label>
+            <input type="text" name="numero" required>
 
-<label>Bairro</label>
-<input type="text" name="bairro" required>
+            <label>Bairro</label>
+            <input type="text" name="bairro" required>
 
-<label>Cidade</label>
-<input type="text" name="cidade" required>
+            <label>Cidade</label>
+            <input type="text" name="cidade" required>
 
-<label>Observações</label>
-<textarea name="obs"></textarea>
+            <label>Observações</label>
+            <textarea name="obs" rows="4"></textarea>
 
-<h3 style="margin:25px 0 10px;">Pagamento PIX</h3>
+            <h3 style="margin:25px 0 12px;">Pagamento via PIX</h3>
 
-<img src="uploads/qrcodepix.jpeg" class="pix-img">
+            <img
+                src="uploads/qrcodepix.jpeg"
+                alt="QR Code PIX"
+                class="pix-img"
+            >
 
-<label>Enviar comprovante</label>
-<input type="file" name="comprovante" required>
+            <label>Enviar comprovante</label>
+            <input
+                type="file"
+                name="comprovante"
+                accept="image/*,.pdf"
+                required
+            >
 
-<button class="btn full" style="margin-top:15px;">
-Confirmar Pedido
-</button>
+            <button class="btn full" style="margin-top:15px;">
+                Confirmar Pedido
+            </button>
 
-</form>
+        </form>
 
-</div>
+    </div>
 
-<div class="checkout-box">
+    <!-- RESUMO -->
+    <div class="checkout-box">
 
-<h3>Resumo do Pedido</h3>
+        <h3 style="margin-bottom:20px;">Resumo do Pedido</h3>
 
-<?php foreach ($items as $item):
+        <?php foreach ($items as $item):
 
-$qtd = $_SESSION['cart'][$item['id']];
-$subtotal = $item['preco'] * $qtd;
+            $qtd = (int) $_SESSION['cart'][$item['id']];
+            $subtotal = $item['preco'] * $qtd;
 
-?>
+        ?>
 
-<div class="resume-line">
-<span><?= htmlspecialchars($item['nome']) ?> x<?= $qtd ?></span>
-<span>R$ <?= number_format($subtotal,2,',','.') ?></span>
-</div>
+        <div class="resume-line">
+            <span>
+                <?= htmlspecialchars($item['nome']) ?> x<?= $qtd ?>
+            </span>
 
-<?php endforeach; ?>
+            <span>
+                R$ <?= number_format($subtotal, 2, ',', '.') ?>
+            </span>
+        </div>
 
-<hr style="margin:15px 0;">
+        <?php endforeach; ?>
 
-<div class="resume-total">
-Total:
-<strong>
-R$ <?= number_format($total,2,',','.') ?>
-</strong>
-</div>
+        <hr style="margin:18px 0;">
 
-</div>
+        <div class="resume-total">
+            Total:
+            <strong>
+                R$ <?= number_format($total, 2, ',', '.') ?>
+            </strong>
+        </div>
+
+    </div>
 
 </div>
 
 <?php require 'footer.php'; ?>
-

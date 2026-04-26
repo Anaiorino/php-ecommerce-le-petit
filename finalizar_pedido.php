@@ -1,114 +1,200 @@
-
 <?php
 
 require 'config.php';
 
-if (empty($_SESSION['user'])) {
-    header("Location: login.php");
-    exit;
+/* ===================================
+   VALIDA LOGIN
+=================================== */
+if (!isLogged()) {
+    redirect('login.php');
 }
 
+/* ===================================
+   VALIDA CARRINHO
+=================================== */
 if (empty($_SESSION['cart'])) {
-    header("Location: cart.php");
-    exit;
+    redirect('cart.php');
 }
 
-$userId = $_SESSION['user']['id'];
+/* ===================================
+   SOMENTE POST
+=================================== */
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    redirect('checkout.php');
+}
 
-$nome = trim($_POST['nome'] ?? '');
-$telefone = trim($_POST['telefone'] ?? '');
-$cep = trim($_POST['cep'] ?? '');
-$endereco = trim($_POST['endereco'] ?? '');
-$numero = trim($_POST['numero'] ?? '');
-$bairro = trim($_POST['bairro'] ?? '');
-$cidade = trim($_POST['cidade'] ?? '');
-$obs = trim($_POST['obs'] ?? '');
+/* ===================================
+   DADOS DO CLIENTE
+=================================== */
+$userId    = $_SESSION['user']['id'];
 
+$nome      = trim($_POST['nome'] ?? '');
+$telefone  = trim($_POST['telefone'] ?? '');
+$cep       = trim($_POST['cep'] ?? '');
+$endereco  = trim($_POST['endereco'] ?? '');
+$numero    = trim($_POST['numero'] ?? '');
+$bairro    = trim($_POST['bairro'] ?? '');
+$cidade    = trim($_POST['cidade'] ?? '');
+$obs       = trim($_POST['obs'] ?? '');
+
+/* ===================================
+   CAMPOS OBRIGATÓRIOS
+=================================== */
 if (
-    $nome === '' || $telefone === '' || $cep === '' ||
-    $endereco === '' || $numero === '' ||
-    $bairro === '' || $cidade === ''
+    $nome === '' ||
+    $telefone === '' ||
+    $cep === '' ||
+    $endereco === '' ||
+    $numero === '' ||
+    $bairro === '' ||
+    $cidade === ''
 ) {
-    header("Location: checkout.php");
-    exit;
+    redirect('checkout.php');
 }
 
-// upload comprovante
-$arquivo = $_FILES['comprovante'] ?? null;
+/* ===================================
+   UPLOAD COMPROVANTE
+=================================== */
 $comprovante = null;
 
-if ($arquivo && $arquivo['error'] === 0) {
+if (!empty($_FILES['comprovante']['name'])) {
 
-    $ext = strtolower(pathinfo($arquivo['name'], PATHINFO_EXTENSION));
+    $arquivo = $_FILES['comprovante'];
 
-    $permitidos = ['jpg','jpeg','png','webp','pdf'];
+    if ($arquivo['error'] === 0) {
 
-    if (in_array($ext, $permitidos)) {
-
-        $comprovante = time() . '_' . uniqid() . '.' . $ext;
-
-        move_uploaded_file(
-            $arquivo['tmp_name'],
-            'uploads/' . $comprovante
+        $ext = strtolower(
+            pathinfo($arquivo['name'], PATHINFO_EXTENSION)
         );
+
+        $permitidos = [
+            'jpg',
+            'jpeg',
+            'png',
+            'webp',
+            'pdf'
+        ];
+
+        if (in_array($ext, $permitidos)) {
+
+            $novoNome =
+                'pix_' .
+                time() .
+                '_' .
+                bin2hex(random_bytes(4)) .
+                '.' .
+                $ext;
+
+            move_uploaded_file(
+                $arquivo['tmp_name'],
+                UPLOAD_DIR . $novoNome
+            );
+
+            $comprovante = $novoNome;
+        }
     }
 }
 
-// calcular total
-$total = 0;
+/* ===================================
+   BUSCAR PRODUTOS DO CARRINHO
+=================================== */
+$ids = array_keys($_SESSION['cart']);
 
-foreach ($_SESSION['cart'] as $pid => $qty) {
+$marks = implode(',', array_fill(0, count($ids), '?'));
 
-    $stmt = $pdo->prepare("SELECT preco FROM products WHERE id=?");
-    $stmt->execute([$pid]);
-
-    $preco = $stmt->fetchColumn();
-
-    if ($preco) {
-        $total += $preco * $qty;
-    }
-}
-
-// criar pedido
 $stmt = $pdo->prepare("
-INSERT INTO orders
-(user_id,total,comprovante,status)
-VALUES (?,?,?,'pendente')
+    SELECT id, preco
+    FROM products
+    WHERE id IN ($marks)
 ");
 
-$stmt->execute([
-    $userId,
-    $total,
-    $comprovante
-]);
+$stmt->execute($ids);
 
-$orderId = $pdo->lastInsertId();
+$produtos = $stmt->fetchAll();
 
-// itens
-foreach ($_SESSION['cart'] as $pid => $qty) {
+/* ===================================
+   CALCULAR TOTAL
+=================================== */
+$total = 0;
 
-    $stmt = $pdo->prepare("SELECT preco FROM products WHERE id=?");
-    $stmt->execute([$pid]);
+$mapaPrecos = [];
 
-    $preco = $stmt->fetchColumn();
+foreach ($produtos as $produto) {
 
+    $mapaPrecos[$produto['id']] = $produto['preco'];
+
+    $qtd = (int) $_SESSION['cart'][$produto['id']];
+
+    $total += $produto['preco'] * $qtd;
+}
+
+/* ===================================
+   TRANSAÇÃO
+=================================== */
+try {
+
+    $pdo->beginTransaction();
+
+    /* PEDIDO */
     $stmt = $pdo->prepare("
-    INSERT INTO order_items
-    (order_id,product_id,qty,price)
-    VALUES (?,?,?,?)
+        INSERT INTO orders
+        (
+            user_id,
+            total,
+            comprovante,
+            status
+        )
+        VALUES (?, ?, ?, 'pendente')
     ");
 
     $stmt->execute([
-        $orderId,
-        $pid,
-        $qty,
-        $preco
+        $userId,
+        $total,
+        $comprovante
     ]);
+
+    $orderId = $pdo->lastInsertId();
+
+    /* ITENS */
+    $stmtItem = $pdo->prepare("
+        INSERT INTO order_items
+        (
+            order_id,
+            product_id,
+            qty,
+            price
+        )
+        VALUES (?, ?, ?, ?)
+    ");
+
+    foreach ($_SESSION['cart'] as $productId => $qtd) {
+
+        $preco = $mapaPrecos[$productId] ?? 0;
+
+        $stmtItem->execute([
+            $orderId,
+            $productId,
+            $qtd,
+            $preco
+        ]);
+    }
+
+    $pdo->commit();
+
+} catch (Exception $e) {
+
+    $pdo->rollBack();
+    redirect('checkout.php');
 }
 
-// limpar carrinho
+/* ===================================
+   LIMPA CARRINHO
+=================================== */
 $_SESSION['cart'] = [];
+
 syncCartSessionToDB($pdo);
 
-header("Location: pedido_realizado.php?id=$orderId");
-
+/* ===================================
+   REDIRECIONA
+=================================== */
+redirect("pedido_realizado.php?id={$orderId}");
